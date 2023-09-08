@@ -100,39 +100,3 @@ const checkTxPool = async (api: ApiPromise): Promise<number> => {
 
     return availablePoolSpace;
 };
-
-/* 
-const formatTransactions = (storedTxs: I_TxData[]): any[] => {
-  console.log('Formatting transactions');
-
-  let transactions = storedTxs.map((tx: I_TxData) => {
-    //Create action
-    let action: Option<Text>;
-    tx.to === ''
-      ? (action = new Option(null, 'Text', tx.to))
-      : (action = new Option(null, 'Text', null));
-
-    let transaction: any = {
-      index: tx.index,
-      transaction: {
-        from: tx.from,
-        nonce: tx.nonce,
-        gasPrice: tx.gasPrice,
-        gasLimit: tx.gasLimit,
-        action,
-        value: tx.value,
-        input: tx.data,
-        v: tx.v,
-        r: tx.r,
-        s: tx.s,
-        gasUsed: tx.gasUsed,
-      },
-    };
-
-    return transaction;
-  });
-
-  return transactions;
-}; */
-
-/*  */
