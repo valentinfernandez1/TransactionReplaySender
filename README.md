@@ -1,4 +1,4 @@
-# StoreTransaction Sender
+# Transaction Replay Sender
 
 Used with the `evm-tx-replay` pallet to perform transaction replay migration into a substrate chain. It sends all the transactions from the old chain to the new chain. All the transactions are stored in a mongoDB collection.
 
