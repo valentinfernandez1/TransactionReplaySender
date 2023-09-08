@@ -1,66 +1,138 @@
 import TxData, { I_TxData } from './models/TxData';
 import config from '../config.json';
-import { I_ChainConnection } from './utils/interfaces';
 import { ApiPromise } from '@polkadot/api';
+import { Option } from '@polkadot/types';
 
-export const migrationWorker = async (api: ApiPromise, sudoAccount: any) => {
-  //let transactions: I_TxData[] = await TxData.find({ index: { gte: config.startingIndex } }).lean();
-  let transactions: I_TxData[] = Array(20000).fill(0);
+export const migrationWorker = async (api: ApiPromise, sudoAccount: any, startNonce: number) => {
+    let nonce = startNonce;
+    let transactions: I_TxData[] = await TxData.find({
+        index: { $gte: config.startingIndex },
+    }).lean();
 
-  let done = false;
-  while (!done) {
-    try {
-      const availablePoolSpace: number = await checkTxPool(api);
+    let done = false;
+    while (!done) {
+        try {
+            const availablePoolSpace: number = await checkTxPool(api);
 
-      availablePoolSpace
-        ? await sendTransactions(transactions, availablePoolSpace, api, sudoAccount)
-        : console.log('🔵 Transaction pool full');
-    } catch (err) {
-      console.log(err);
-      break;
+            if (!availablePoolSpace) {
+                console.log('🔵 Transaction pool full');
+                return;
+            }
+            nonce = await sendTransactions(
+                transactions,
+                availablePoolSpace,
+                api,
+                sudoAccount,
+                nonce
+            );
+        } catch (err) {
+            console.log(err);
+            break;
+        }
+        await new Promise((r) => setTimeout(r, config.timeout));
     }
-    await new Promise((r) => setTimeout(r, config.timeout));
-  }
 };
 
 const sendTransactions = async (
-  transactions: I_TxData[],
-  sendAmount: number,
-  api: ApiPromise,
-  sudoAccount: any
-) => {
-  console.log(`🟢 Sending ${sendAmount} transactions`);
-  const nextSudoNonce = (await api.rpc.system.accountNextIndex(sudoAccount.address)).toNumber();
+    transactions: I_TxData[],
+    sendAmount: number,
+    api: ApiPromise,
+    sudoAccount: any,
+    nonce: number
+): Promise<number> => {
+    console.log(`🟢 Sending ${sendAmount} transactions`);
 
-  let transactionPromises: Promise<any>[] = [];
+    let transactionPromises: Promise<any>[] = [];
 
-  for (let txIndex = 0; txIndex < sendAmount; txIndex++) {
-    let nonce = nextSudoNonce + txIndex;
-    sendStoreTx(transactions[txIndex], api, sudoAccount, nonce);
-  }
+    for (let txIndex = 0; txIndex < sendAmount; txIndex++) {
+        replayTx(transactions[txIndex], api, sudoAccount, nonce);
+        nonce++;
+    }
 
-  await Promise.all(transactionPromises);
+    await Promise.all(transactionPromises);
+    return nonce;
 };
 
 //TODO: use storeTx extrinsic
-const sendStoreTx = async (tx: I_TxData, api: ApiPromise, sudoAccount: any, nonce: number) => {
-  //TODO: format data for sending storeTX
-  //const args = formatData()
+const replayTx = async (tx: I_TxData, api: ApiPromise, sudoAccount: any, nonce: number) => {
+    let action;
+    tx.to == ''
+        ? (action = new Option(api.registry, 'H160', null))
+        : (action = new Option(api.registry, 'H160', tx.to));
 
-  //TODO: Replace inside call with storeTx extrinsic
-  //api.tx.sudo.sudo(api.tx.evmTxReplay.storeTx(args));
-  let remark = new TextEncoder().encode('this is a remark for testing purposes');
-  await api.tx.sudo.sudo(api.tx.system.remarkWithEvent(remark)).signAndSend(sudoAccount, { nonce });
+    await api.tx.sudo
+        .sudo(
+            api.tx.evmTxReplay.replayTx(
+                BigInt(tx.index), //index
+                String(tx.from), //from
+                BigInt(tx.nonce), //nonce
+                BigInt(tx.gasPrice), //gasPrice
+                BigInt(tx.gasLimit), //gasLimit
+                action, //action
+                BigInt(tx.value), //value
+                String(tx.data), //input
+                BigInt(tx.v), //v
+                String(tx.r), //r
+                String(tx.s) //s
+            )
+        )
+        .signAndSend(sudoAccount, { nonce }, ({ events = [], status }) => {
+            if (status.isFinalized) {
+                console.log('Extrinsic finalized with block hash', status.asFinalized.toHex());
+                /* 
+                // Check for events emitted by the extrinsic
+                events.forEach(({ event }) => {
+                    console.log('Event:', event.section, event.method, event.data.toString());
+                }); */
+            }
+        });
 };
 
 const checkTxPool = async (api: ApiPromise): Promise<number> => {
-  const txPoolAmount: number = ((await api.rpc.author.pendingExtrinsics()).toHuman() as Array<any>)
-    .length;
+    const txPoolAmount: number = (
+        (await api.rpc.author.pendingExtrinsics()).toHuman() as Array<any>
+    ).length;
 
-  //Obtain available space taking into account a buffer just in case
-  let availablePoolSpace = config.poolLimit - txPoolAmount - config.poolBuffer;
+    //Obtain available space taking into account a buffer just in case
+    let availablePoolSpace = config.poolLimit - txPoolAmount - config.poolBuffer;
 
-  if (availablePoolSpace < 0) return 0;
+    if (availablePoolSpace < 0) return 0;
 
-  return availablePoolSpace;
+    return availablePoolSpace;
 };
+
+/* 
+const formatTransactions = (storedTxs: I_TxData[]): any[] => {
+  console.log('Formatting transactions');
+
+  let transactions = storedTxs.map((tx: I_TxData) => {
+    //Create action
+    let action: Option<Text>;
+    tx.to === ''
+      ? (action = new Option(null, 'Text', tx.to))
+      : (action = new Option(null, 'Text', null));
+
+    let transaction: any = {
+      index: tx.index,
+      transaction: {
+        from: tx.from,
+        nonce: tx.nonce,
+        gasPrice: tx.gasPrice,
+        gasLimit: tx.gasLimit,
+        action,
+        value: tx.value,
+        input: tx.data,
+        v: tx.v,
+        r: tx.r,
+        s: tx.s,
+        gasUsed: tx.gasUsed,
+      },
+    };
+
+    return transaction;
+  });
+
+  return transactions;
+}; */
+
+/*  */

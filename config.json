@@ -1,8 +1,8 @@
 {
-  "batchSize": 5000,
-  "blockGasLimit": 15000000,
-  "poolBuffer": 20,
-  "poolLimit": 5000,
-  "startingIndex": 0,
-  "timeout": 6000
+    "batchSize": 5000,
+    "blockGasLimit": 15000000,
+    "poolBuffer": 20,
+    "poolLimit": 34,
+    "startingIndex": 0,
+    "timeout": 6000
 }
