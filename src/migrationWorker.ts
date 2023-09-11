@@ -3,7 +3,11 @@ import config from '../config.json';
 import { ApiPromise } from '@polkadot/api';
 import { Option } from '@polkadot/types';
 
-export const migrationWorker = async (api: ApiPromise, sudoAccount: any, startNonce: number) => {
+export const migrationWorker = async (
+    api: ApiPromise,
+    authorityAccount: any,
+    startNonce: number
+) => {
     let nonce = startNonce;
     let transactions: I_TxData[] = await TxData.find({
         index: { $gte: config.startingIndex },
@@ -22,7 +26,7 @@ export const migrationWorker = async (api: ApiPromise, sudoAccount: any, startNo
                 transactions,
                 availablePoolSpace,
                 api,
-                sudoAccount,
+                authorityAccount,
                 nonce
             );
         } catch (err) {
@@ -37,7 +41,7 @@ const sendTransactions = async (
     transactions: I_TxData[],
     sendAmount: number,
     api: ApiPromise,
-    sudoAccount: any,
+    authorityAccount: any,
     nonce: number
 ): Promise<number> => {
     console.log(`🟢 Sending ${sendAmount} transactions`);
@@ -45,7 +49,7 @@ const sendTransactions = async (
     let transactionPromises: Promise<any>[] = [];
 
     for (let txIndex = 0; txIndex < sendAmount; txIndex++) {
-        replayTx(transactions[txIndex], api, sudoAccount, nonce);
+        replayTx(transactions[txIndex], api, authorityAccount, nonce);
         nonce++;
     }
 
@@ -54,7 +58,7 @@ const sendTransactions = async (
 };
 
 //TODO: use storeTx extrinsic
-const replayTx = async (tx: I_TxData, api: ApiPromise, sudoAccount: any, nonce: number) => {
+const replayTx = async (tx: I_TxData, api: ApiPromise, authorityAccount: any, nonce: number) => {
     let action;
     tx.to == ''
         ? (action = new Option(api.registry, 'H160', null))
@@ -76,7 +80,7 @@ const replayTx = async (tx: I_TxData, api: ApiPromise, sudoAccount: any, nonce: 
                 String(tx.s) //s
             )
         )
-        .signAndSend(sudoAccount, { nonce }, ({ events = [], status }) => {
+        .signAndSend(authorityAccount, { nonce }, ({ events = [], status }) => {
             if (status.isFinalized) {
                 console.log('Extrinsic finalized with block hash', status.asFinalized.toHex());
                 /* 

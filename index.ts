@@ -9,20 +9,28 @@ require('dotenv').config();
 
 const CHAIN_URL = process.env.CHAIN_URL || 'ws://localhost:9933';
 const MONGO_URL = process.env.MONGO_URL || 'mongodb://localhost:27017';
+const PERMISSIONED_AUTHORITY = process.env.PERMISSIONED_AUTHORITY;
 
 const main = async () => {
+    if (!PERMISSIONED_AUTHORITY) {
+        console.log('No permissioned authority account was provided');
+        process.exit(0);
+    }
+
     //Initial setup
     const wsProvider = new WsProvider(CHAIN_URL);
     const api: ApiPromise = await ApiPromise.create({ provider: wsProvider });
 
     const keyring = new Keyring({ type: 'ethereum' });
-    const sudoAccount = keyring.addFromUri(testData.SUDO_PRIVKEY);
-    const sudoNonce = (await api.rpc.system.accountNextIndex(sudoAccount.address)).toNumber();
+    const authorityAccount = keyring.addFromUri(PERMISSIONED_AUTHORITY);
+    const authorityNonce = (
+        await api.rpc.system.accountNextIndex(authorityAccount.address)
+    ).toNumber();
 
     //Connect to mongoDB and start transactionSender script
     await connectWithRetry(MONGO_URL, async () => {
         try {
-            await migrationWorker(api, sudoAccount, sudoNonce);
+            await migrationWorker(api, authorityAccount, authorityNonce);
         } catch (error) {
             console.log(error);
         }
