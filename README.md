@@ -20,4 +20,5 @@ Also inside a `.env` file the following values are needed
 ```
 CHAIN_URL = # Receiving blockchain
 MONGO_URL = # MongoDB collection where the txs are stored
+PERMISSIONED_AUTHORITY = #Private key of account configured as authority in evm-tx-replay pallet
 ```
